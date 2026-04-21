@@ -1,4 +1,4 @@
-# MRC → binary mask → point cloud → Chroma shape design (see run_mrc_chroma_shape.py at repo root).
+# MRC → binary mask → point cloud → optional Chroma shape design (run_mrc_chroma_shape.py at repo root).
 input_mrc: projects/input/module1_2_15A.mrc
 output_dir: projects/output
 
@@ -20,9 +20,61 @@ adaptive_subsample_seed: 0
 max_points_conditioner: null
 conditioner_subsample_seed: 0
 
-# Chroma sampling controls (lower num_residues uses less memory during sampling).
-num_residues: 400
+# If false: write point cloud + reports only (no Chroma model load / sampling).
+# Override: CLI `--chroma` forces true; `--no-chroma` forces false.
+run_chroma: false
+
+# Torch RNG (used before chroma.sample when run_chroma is true).
 seed: 0
 
 # Optional API key for chroma cloud auth.
 api_key: null
+
+# conditioners.ShapeConditioner — all constructor kwargs (defaults match Chroma).
+# X_target and noise_schedule are supplied by the pipeline.
+shape_conditioner:
+  autoscale: true
+  autoscale_num_residues: 400
+  autoscale_target_ratio: 0.4
+  scale_invariant: false
+  shape_loss_weight: 20.0
+  shape_loss_cutoff: 0.0
+  shape_cutoff_D: 0.01
+  scale_max_rg_ratio: 1.5
+  sinkhorn_iterations: 10
+  sinkhorn_scale: 1.0
+  sinkhorn_scale_gw: 200.0
+  sinkhorn_iterations_gw: 30
+  gw_layout: true
+  gw_layout_coefficient: 0.4
+  eps: 0.001
+  debug: false
+
+# Chroma.sample — all kwargs except `conditioner` (injected by the script).
+# protein_init: null or path to .pdb / .cif (relative paths resolved from cwd).
+chroma_sample:
+  samples: 1
+  steps: 500
+  chain_lengths: [400]
+  tspan: [1.0, 0.001]
+  protein_init: null
+  langevin_factor: 2
+  langevin_isothermal: false
+  inverse_temperature: 10
+  initialize_noise: true
+  integrate_func: euler_maruyama
+  sde_func: reverse_sde
+  trajectory_length: 200
+  full_output: false
+  design_ban_S: null
+  design_method: potts
+  design_selection: null
+  design_t: 0.5
+  temperature_S: 0.01
+  temperature_chi: 0.001
+  top_p_S: null
+  regularization: LCP
+  potts_mcmc_depth: 500
+  potts_proposal: dlmc
+  potts_symmetry_order: null
+  verbose: false
