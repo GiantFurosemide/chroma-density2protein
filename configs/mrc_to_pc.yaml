@@ -1,0 +1,7 @@
+task: to-pc
+input_mrc: ./graph_mask.mrc
+output_npy: ./graph_points.npy
+threshold: 0.5
+# Optional: omit max_points/seed to avoid random downsampling.
+# max_points: 8000
+# seed: 0

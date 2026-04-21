@@ -1,0 +1,6 @@
+task: to-mrc
+input_npy: ./graph_points.npy
+output_mrc: ./graph_points_recon.mrc
+voxel_size: [1.0, 1.0, 1.0]
+origin: [0.0, 0.0, 0.0]
+mode: occupancy

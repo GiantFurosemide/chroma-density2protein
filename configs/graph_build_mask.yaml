@@ -1,0 +1,6 @@
+task: build-mask
+topology: ./graph_inputs/graph_topology.json
+node_radii: ./graph_inputs/node_radii.json
+edge_radii: ./graph_inputs/edge_radii.json
+grid_config: ./graph_inputs/grid_config.json
+output_mrc: ./graph_mask.mrc

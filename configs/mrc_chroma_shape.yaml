@@ -1,0 +1,28 @@
+# MRC → binary mask → point cloud → Chroma shape design (see run_mrc_chroma_shape.py at repo root).
+input_mrc: projects/input/module1_2_15A.mrc
+output_dir: projects/output
+
+# Required for reproducible masking: voxels with value >= threshold are candidates.
+# If null, threshold_quantile is used once to derive a scalar threshold (see warning in logs).
+threshold: 0.00871
+threshold_quantile: 0.00871
+
+# Adaptive cap until selected voxel count <= max_voxels.
+# - binary_max: 2×2×2 max-pool on 0/1 mask (no FFT; foreground stays binary).
+# - mean_fft: legacy FFT low-pass + 2×2×2 mean (smooths values; uses 0.5 on processed grid).
+use_adaptive_bin: true
+adaptive_pooling: binary_max
+max_voxels: 2000
+max_bin_rounds: 32
+adaptive_subsample_seed: 0
+
+# Cap points fed to ShapeConditioner (optional). Omit or null to use full point cloud from above.
+max_points_conditioner: null
+conditioner_subsample_seed: 0
+
+# Chroma sampling controls (lower num_residues uses less memory during sampling).
+num_residues: 400
+seed: 0
+
+# Optional API key for chroma cloud auth.
+api_key: null
