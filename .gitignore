@@ -1,0 +1,13 @@
+projects/
+projects_*/
+__pycache__/
+*.pdb
+*.cif
+*.mrc
+*.npy
+*.npz
+*.pt
+*.pkl
+*.pdb.gz
+*.pdb.gz.part
+
