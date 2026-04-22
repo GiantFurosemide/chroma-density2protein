@@ -30,6 +30,15 @@ seed: 0
 # Optional API key for chroma cloud auth.
 api_key: null
 
+# Sampling execution strategy:
+# - serial: run `samples` times with `chroma.sample(samples=1)` to reduce peak VRAM.
+# - batch: one call to `chroma.sample(samples=N)`, higher peak VRAM.
+sampling_mode: serial
+# Seed schedule used in serial mode:
+# - increment: seed_i = seed + i
+# - fixed: all runs use the same seed
+seed_schedule: increment
+
 # conditioners.ShapeConditioner — all constructor kwargs (defaults match Chroma).
 # X_target and noise_schedule are supplied by the pipeline.
 shape_conditioner:

@@ -76,6 +76,13 @@ CHROMA_SAMPLE_DEFAULTS: Dict[str, Any] = {
 }
 
 
+def _validate_choice(name: str, value: str, allowed: tuple[str, ...]) -> str:
+    out = str(value).strip().lower()
+    if out not in allowed:
+        raise ValueError(f"{name} must be one of {allowed}, got {value!r}.")
+    return out
+
+
 def _merge_dict_defaults(defaults: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     out = dict(defaults)
     if override:
@@ -151,6 +158,15 @@ def _save_sampled_proteins(
     shaped_protein.to(str(out_cif))
     return {
         "multi": False,
+        "protein_pdb": str(out_pdb.resolve()),
+        "protein_cif": str(out_cif.resolve()),
+    }
+
+
+def _save_one_sampled_protein(shaped_protein: Protein, out_pdb: Path, out_cif: Path) -> Dict[str, str]:
+    shaped_protein.to(str(out_pdb))
+    shaped_protein.to(str(out_cif))
+    return {
         "protein_pdb": str(out_pdb.resolve()),
         "protein_cif": str(out_cif.resolve()),
     }
@@ -257,12 +273,16 @@ def _build_text_summary(report: Dict[str, Any]) -> str:
     else:
         lines.append(f"  seed: {ch.get('seed')}")
         lines.append(f"  device: {ch.get('device')}")
+        lines.append(f"  sampling_mode: {ch.get('sampling_mode')}")
+        lines.append(f"  seed_schedule: {ch.get('seed_schedule')}")
         sc = ch.get("shape_conditioner") or {}
         lines.append(f"  ShapeConditioner.autoscale_num_residues: {sc.get('autoscale_num_residues')}")
         sm = ch.get("chroma_sample") or {}
         lines.append(f"  sample.chain_lengths: {sm.get('chain_lengths')}")
         lines.append(f"  sample.samples: {sm.get('samples')}")
         lines.append(f"  sample.steps: {sm.get('steps')}")
+        if ch.get("sample_seeds"):
+            lines.append(f"  per-sample seeds: {ch.get('sample_seeds')}")
         if ch.get("multi"):
             for i, o in enumerate(ch.get("outputs") or []):
                 lines.append(f"  output PDB [{i}]: {o.get('protein_pdb')}")
@@ -329,6 +349,16 @@ def main() -> None:
     subsample_seed = cfg.get("adaptive_subsample_seed", cfg.get("seed", 0))
     seed = int(cfg.get("seed", 0))
     api_key = cfg.get("api_key")
+    sampling_mode = _validate_choice(
+        "sampling_mode",
+        str(cfg.get("sampling_mode", "serial")),
+        ("serial", "batch"),
+    )
+    seed_schedule = _validate_choice(
+        "seed_schedule",
+        str(cfg.get("seed_schedule", "increment")),
+        ("increment", "fixed"),
+    )
 
     shape_conditioner_cfg = _merge_dict_defaults(
         SHAPE_CONDITIONER_DEFAULTS,
@@ -338,6 +368,8 @@ def main() -> None:
         CHROMA_SAMPLE_DEFAULTS,
         cfg.get("chroma_sample") if isinstance(cfg.get("chroma_sample"), dict) else None,
     )
+    if int(chroma_sample_cfg.get("samples", 1)) <= 0:
+        raise ValueError("chroma_sample.samples must be positive.")
 
     if api_key:
         api.register_key(str(api_key))
@@ -482,6 +514,8 @@ def main() -> None:
         "origin_xyz": [float(v) for v in origin],
         "initial_full_res_mask_ones": initial_full_res_mask_ones,
         "adaptive_pooling": adaptive_pooling,
+        "sampling_mode": sampling_mode,
+        "seed_schedule": seed_schedule,
     }
 
     adaptive_section: Optional[Dict[str, Any]] = None
@@ -606,6 +640,8 @@ def main() -> None:
         partial_report["chroma"] = {
             "skipped": True,
             "reason": "run_chroma is false in YAML or --no-chroma was set",
+            "sampling_mode": sampling_mode,
+            "seed_schedule": seed_schedule,
             "shape_conditioner": shape_conditioner_cfg,
             "chroma_sample": chroma_sample_cfg,
         }
@@ -635,22 +671,45 @@ def main() -> None:
         **sc_kw,
     ).to(device)
 
-    torch.manual_seed(seed)
     sample_kw = _build_chroma_sample_kwargs(chroma_sample_cfg, conditioner, device)
-    sample_out = chroma.sample(**sample_kw)
-    if sample_kw.get("full_output"):
-        shaped_protein, _full_out_dict = sample_out  # noqa: F841 — trajectory bundle not saved here
+    requested_samples = int(sample_kw.get("samples", 1))
+    sample_seeds: List[int] = []
+    if sampling_mode == "serial" and requested_samples > 1:
+        serial_kw = dict(sample_kw)
+        serial_kw["samples"] = 1
+        outputs: List[Dict[str, str]] = []
+        for i in range(requested_samples):
+            seed_i = seed if seed_schedule == "fixed" else seed + i
+            sample_seeds.append(seed_i)
+            torch.manual_seed(seed_i)
+            sample_out = chroma.sample(**serial_kw)
+            if serial_kw.get("full_output"):
+                shaped_protein, _full_out_dict = sample_out  # noqa: F841
+            else:
+                shaped_protein = sample_out
+            out_pdb = output_dir / f"module1_2_15A_shape_design_{i + 1:04d}.pdb"
+            out_cif = output_dir / f"module1_2_15A_shape_design_{i + 1:04d}.cif"
+            outputs.append(_save_one_sampled_protein(shaped_protein, out_pdb, out_cif))
+        saved = {"multi": True, "outputs": outputs}
     else:
-        shaped_protein = sample_out
-
-    out_pdb = output_dir / "module1_2_15A_shape_design.pdb"
-    out_cif = output_dir / "module1_2_15A_shape_design.cif"
-    saved = _save_sampled_proteins(shaped_protein, out_pdb, out_cif)
+        torch.manual_seed(seed)
+        sample_seeds = [seed]
+        sample_out = chroma.sample(**sample_kw)
+        if sample_kw.get("full_output"):
+            shaped_protein, _full_out_dict = sample_out  # noqa: F841 — trajectory bundle not saved here
+        else:
+            shaped_protein = sample_out
+        out_pdb = output_dir / "module1_2_15A_shape_design.pdb"
+        out_cif = output_dir / "module1_2_15A_shape_design.cif"
+        saved = _save_sampled_proteins(shaped_protein, out_pdb, out_cif)
 
     chroma_report: Dict[str, Any] = {
         "skipped": False,
         "seed": seed,
         "device": device,
+        "sampling_mode": sampling_mode,
+        "seed_schedule": seed_schedule,
+        "sample_seeds": sample_seeds,
         "shape_conditioner": shape_conditioner_cfg,
         "chroma_sample": chroma_sample_cfg,
     }

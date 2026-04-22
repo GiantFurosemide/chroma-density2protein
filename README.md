@@ -22,7 +22,17 @@ This repository now includes a complete bridge pipeline:
 - `examples_graph_mrc_pointcloud_chroma.py`  
   End-to-end runnable example script for full workflow.
 - `run_mrc_chroma_shape.py` (repository root)  
-  Reads [`configs/mrc_chroma_shape.yaml`](configs/mrc_chroma_shape.yaml) by default (`--i` overrides): **binarizes** the map at the resolved threshold (≥ threshold → 1, else 0), then adaptive coarsening until ≤ `max_voxels`. Use **`adaptive_pooling: binary_max`** (default) for **2×2×2 max-pool** on the mask (no FFT; stays 0/1), or **`mean_fft`** for the legacy **FFT + mean** path. **`run_chroma`** defaults to **`false`** (point cloud + QC only); set **`run_chroma: true`** in YAML or pass **`--chroma`** to run **`ShapeConditioner`** + **`Chroma.sample`**. All constructor / sample kwargs are listed under **`shape_conditioner`** and **`chroma_sample`** in the YAML. **`--no-chroma`** forces skip. Writes under `projects/output/` (unless you change `output_dir` in YAML): **`module1_2_15A_points.npy`**, **`module1_2_15A_input_density_orthogonal.png`**, **`module1_2_15A_input_density_ge_threshold_else_zero_orthogonal.png`** (keep values above threshold, zero below), **`module1_2_15A_input_mask_orthogonal.png`**, **`module1_2_15A_final_density.mrc`**, **`module1_2_15A_final_density_orthogonal.png`**, **`module1_2_15A_points_orthogonal.png`**, **`module1_2_15A_overlay_points_on_final.png`**, **`module1_2_15A_overlay_points_on_input_mask.png`**, and run reports **`mrc_chroma_shape_run_report.json`** / **`mrc_chroma_shape_run_report.txt`**. With Chroma enabled, also **`module1_2_15A_shape_design.pdb`** / **`.cif`**. **matplotlib** is required for the PNGs.
+  Reads [`configs/mrc_chroma_shape.yaml`](configs/mrc_chroma_shape.yaml) by default (`--i` overrides): **binarizes** the map at the resolved threshold (≥ threshold → 1, else 0), then adaptive coarsening until ≤ `max_voxels`. Use **`adaptive_pooling: binary_max`** (default) for **2×2×2 max-pool** on the mask (no FFT; stays 0/1), or **`mean_fft`** for the legacy **FFT + mean** path. **`run_chroma`** defaults to **`false`** (point cloud + QC only); set **`run_chroma: true`** in YAML or pass **`--chroma`** to run **`ShapeConditioner`** + **`Chroma.sample`**. Sampling behavior is controlled by:
+  - `sampling_mode: serial | batch` (default `serial`)
+  - `seed_schedule: increment | fixed` (used by serial mode)
+  - `chroma_sample.samples`
+  
+  Notes:
+  - Native `chroma.sample(samples=N)` is a batch call.
+  - In this script, `sampling_mode: serial` converts `samples: N` into `N` calls of `chroma.sample(samples=1)` to reduce peak GPU memory.
+  - `sampling_mode: batch` keeps native batch behavior.
+  
+  Writes under `projects/output/` (unless you change `output_dir` in YAML): **`module1_2_15A_points.npy`**, **`module1_2_15A_input_density_orthogonal.png`**, **`module1_2_15A_input_density_ge_threshold_else_zero_orthogonal.png`** (keep values above threshold, zero below), **`module1_2_15A_input_mask_orthogonal.png`**, **`module1_2_15A_final_density.mrc`**, **`module1_2_15A_final_density_orthogonal.png`**, **`module1_2_15A_points_orthogonal.png`**, **`module1_2_15A_overlay_points_on_final.png`**, **`module1_2_15A_overlay_points_on_input_mask.png`**, and run reports **`mrc_chroma_shape_run_report.json`** / **`mrc_chroma_shape_run_report.txt`**. With Chroma enabled, also **`module1_2_15A_shape_design.pdb`** / **`.cif`** or indexed multi-sample outputs. **matplotlib** is required for the PNGs.
 
 From the repository root:
 
@@ -87,7 +97,7 @@ python mrc_pointcloud.py --i ./configs/mrc_to_pc.yaml
 KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 python run_mrc_chroma_shape.py --i ./configs/mrc_chroma_shape.yaml
 ```
 
-Edit `configs/mrc_chroma_shape.yaml` for `input_mrc`, threshold, and `output_dir`. By default **`run_chroma: false`** (writes `module1_2_15A_points.npy` and QC). For sampling, use **`--chroma`** or set **`run_chroma: true`**; tune **`shape_conditioner`** and **`chroma_sample`** in the same file.
+Edit `configs/mrc_chroma_shape.yaml` for `input_mrc`, threshold, and `output_dir`. By default **`run_chroma: false`** (writes `module1_2_15A_points.npy` and QC). For sampling, use **`--chroma`** or set **`run_chroma: true`**; tune **`shape_conditioner`**, **`chroma_sample`**, `sampling_mode`, and `seed_schedule` in the same file.
 
 ## 6) End-to-end script
 
@@ -141,7 +151,7 @@ flowchart LR
 
 - **Dependencies:** Chroma workflows need the usual scientific stack; orthogonal QC figures from the root `run_mrc_chroma_shape.py` additionally require **matplotlib**.
 - If masks look clipped, enlarge `box_shape_zyx` or adjust `origin_xyz_A`.
-- If point cloud is too dense, increase threshold or set smaller `max_points` in YAML.
+- If point cloud is too dense, increase threshold or set smaller `max_points_conditioner` in YAML.
 - If point cloud is too sparse, lower threshold.
 - Keep graph topology and radius files separate for maintainability and parameter sweeps.
 

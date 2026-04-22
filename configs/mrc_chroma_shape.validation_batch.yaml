@@ -1,0 +1,48 @@
+# Validation config: batch mode single-sample compatibility.
+input_mrc: projects_002/module1_2_15A.mrc
+output_dir: projects_002/output_validation_batch
+threshold: 0.00871
+threshold_quantile: 0.995
+use_adaptive_bin: true
+adaptive_pooling: binary_max
+max_voxels: 1000
+max_bin_rounds: 6
+adaptive_subsample_seed: 0
+max_points_conditioner: 192
+conditioner_subsample_seed: 0
+run_chroma: true
+seed: 100
+api_key: null
+sampling_mode: batch
+seed_schedule: increment
+shape_conditioner:
+  autoscale: true
+  autoscale_num_residues: 64
+  sinkhorn_iterations: 3
+  debug: false
+chroma_sample:
+  samples: 1
+  steps: 3
+  chain_lengths: [64]
+  tspan: [1.0, 0.001]
+  protein_init: null
+  langevin_factor: 2
+  langevin_isothermal: false
+  inverse_temperature: 10
+  initialize_noise: true
+  integrate_func: euler_maruyama
+  sde_func: reverse_sde
+  trajectory_length: 5
+  full_output: false
+  design_ban_S: null
+  design_method: potts
+  design_selection: null
+  design_t: 0.5
+  temperature_S: 0.01
+  temperature_chi: 0.001
+  top_p_S: null
+  regularization: LCP
+  potts_mcmc_depth: 10
+  potts_proposal: dlmc
+  potts_symmetry_order: null
+  verbose: false
